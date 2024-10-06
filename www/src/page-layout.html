@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+        <title>{{ .Config.MailFullyQualifiedDomainName }} {{ .Title }}</title>
+    <link rel="stylesheet" href="./main.css">
+    <link rel="icon" href="/logo.svg">
+    <link rel="mask-icon" href="/logo.svg" color="#000000">
+</head>
+<body>
+
+<ul id="menu">
+    <li><a href="index.html">home</a></li>
+    <li><a href="info.html">info</a></li>
+    <li><a href="privacy.html">privacy</a></li>
+    <li><a href="https://github.com/s0ph0s-2/gochatmail">public code ↗</a></li>
+    <li id="domain"><a href="index.html">{{ .Config.MailFullyQualifiedDomainName }}</a></li>
+</ul>
+
+{{ template "PageContent" }}
+
+</body>
+</html>
