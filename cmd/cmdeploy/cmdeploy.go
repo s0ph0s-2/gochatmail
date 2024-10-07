@@ -1,16 +1,25 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
-    "io/fs"
+	"html/template"
+	"io/fs"
 	"os"
-    "strings"
-    "bytes"
-    "github.com/yuin/goldmark"
-    "path/filepath"
-    "html/template"
+    "io"
+	"path/filepath"
+	"strings"
+    "time"
+    "crypto/sha1"
+    "reflect"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/parser"
+    "github.com/yuin/goldmark/extension"
+    "github.com/yuin/goldmark/renderer/html"
+    "github.com/skratchdot/open-golang/open"
 )
 
 type chatmail_config struct {
@@ -113,7 +122,18 @@ func make_page_name(stem string) string {
 
 type page_vars struct {
     Title string
+    AutoReload bool
     Config chatmail_config
+}
+
+func make_markdown_renderer() goldmark.Markdown {
+    return goldmark.New(
+        goldmark.WithExtensions(extension.GFM, extension.Typographer),
+        goldmark.WithParserOptions(parser.WithAutoHeadingID()),
+        goldmark.WithRendererOptions(
+            html.WithUnsafe(),
+        ),
+    )
 }
 
 func build_website(config chatmail_config, input_dir string, output_dir string) {
@@ -126,6 +146,7 @@ func build_website(config chatmail_config, input_dir string, output_dir string) 
     if rd_err != nil {
         panic(rd_err)
     }
+    md := make_markdown_renderer()
     for _, dirent := range contents {
         if dirent.IsDir() {
             continue
@@ -144,14 +165,14 @@ func build_website(config chatmail_config, input_dir string, output_dir string) 
                 panic(err)
             }
             var md_buf bytes.Buffer
-            if err := goldmark.Convert(page_content_md, &md_buf); err != nil {
+            if err := md.Convert(page_content_md, &md_buf); err != nil {
                 panic(err)
             }
             _, err = local_tmpls.New("PageContent").Parse(md_buf.String())
             if err != nil {
                 panic(err)
             }
-            this_page_vars := page_vars{ page_name, config }
+            this_page_vars := page_vars{ page_name, true, config }
             var html_buf bytes.Buffer
             err = local_tmpls.ExecuteTemplate(&html_buf, "page-layout.html", this_page_vars)
             if err != nil {
@@ -172,8 +193,62 @@ func build_website(config chatmail_config, input_dir string, output_dir string) 
     }
 }
 
-func watch_for_changes() {
-	// TODO: this
+type file_analysis_result struct {
+    Mtime int64
+    Hash []byte
+}
+
+func analyze_dir(dir string) map[string]file_analysis_result {
+    // Compute hashes of every file in a directory (that isn't hidden or a vim
+    // swap file).
+    results := make(map[string]file_analysis_result)
+    dir_contents, err := os.ReadDir(dir)
+    if err != nil {
+        panic(err)
+    }
+    for _, dirent := range dir_contents {
+        if dirent.IsDir() {
+            continue
+        }
+        name := dirent.Name()
+        if filepath.Ext(name) == ".swp" {
+            continue
+        }
+        info, err := dirent.Info()
+        if err != nil {
+            panic(err)
+        }
+        lastModified := info.ModTime().Unix()
+        f, err := os.Open(filepath.Join(dir, name))
+        if err != nil {
+            panic(err)
+        }
+        defer f.Close()
+        h := sha1.New()
+        if _, err = io.Copy(h, f); err != nil {
+            panic(err)
+        }
+        results[name] = file_analysis_result{ lastModified, h.Sum(nil) }
+    }
+    return results
+}
+
+func watch_for_changes(config chatmail_config, input_dir string, output_dir string) {
+    fmt.Printf("Watching for changes in %s...\n", input_dir)
+    fmt.Println("Press Ctrl+C to stop watching once you're finished editing.")
+    var current_state map[string]file_analysis_result = analyze_dir(input_dir)
+    var next_state map[string]file_analysis_result
+    for {
+        next_state = analyze_dir(input_dir)
+        statesEqual := reflect.DeepEqual(current_state, next_state)
+        if statesEqual {
+            time.Sleep(1 * time.Second)
+            continue
+        }
+        current_state = next_state
+        build_website(config, input_dir, output_dir)
+        fmt.Println("Changes detected! Pages have been regenerated.")
+    }
 }
 
 func main() {
@@ -209,7 +284,12 @@ func main() {
         os.RemoveAll(output_dir)
         os.Mkdir(output_dir, fs.ModeDir | 0755)
 		build_website(config, input_dir, output_dir)
-		watch_for_changes()
+        index_html, path_err := filepath.Abs(filepath.Join(output_dir, "index.html"))
+        if path_err != nil {
+            panic(path_err)
+        }
+        open.Run("file://" + index_html)
+		watch_for_changes(config, input_dir, output_dir)
 	default:
 		fmt.Println("expected 'init' or 'webdev' subcommands")
 		os.Exit(1)

@@ -11,16 +11,16 @@ for usage in chats, especially DeltaChat.
 By default, signing up using the QR code or invite link will generate a random address. For most use cases, this is fine---Delta Chat prefers showing the name you configure for yourself, rather than the email address.  However, if you would like to choose your own email address, it is possible to configure.  In the Delta Chat account setup you may tap `Create a profile` then `Use other server` and choose `Classic e-mail login`. Here, fill the two fields like this: 
 
 - `E-Mail Address`: invent a word with
-{% if .Config.UsernameMinLength == .Config.UsernameMaxLength %}
+{{ if eq .Config.UsernameMinLength .Config.UsernameMaxLength }}
   *exactly* {{ .Config.UsernameMinLength }}
-{% else %}
+{{ else }}
   {{ .Config.UsernameMinLength }}
-  {% if .Config.UsernameMaxLength > 12 %}
+  {{ if gt .Config.UsernameMaxLength 12 }}
     or more
-  {% else %}
+  {{ else }}
     to {{ .Config.UsernameMaxLength }}
-  {% endif %}
-{% endif %}
+  {{ end }}
+{{ end }}
   characters
   and append `@{{.Config.MailFullyQualifiedDomainName}}` to it.
 

@@ -1,9 +1,12 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
-        <title>{{ .Config.MailFullyQualifiedDomainName }} {{ .Title }}</title>
+    {{ if .AutoReload }}
+    <meta http-equiv="refresh" content="3" />
+    {{ end }}
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .Config.MailFullyQualifiedDomainName }} {{ .Title }}</title>
     <link rel="stylesheet" href="./main.css">
     <link rel="icon" href="/logo.svg">
     <link rel="mask-icon" href="/logo.svg" color="#000000">
@@ -18,7 +21,7 @@
     <li id="domain"><a href="index.html">{{ .Config.MailFullyQualifiedDomainName }}</a></li>
 </ul>
 
-{{ template "PageContent" }}
+{{ template "PageContent" . }}
 
 </body>
 </html>
