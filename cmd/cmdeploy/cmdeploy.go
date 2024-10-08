@@ -14,12 +14,14 @@ import (
     "time"
     "crypto/sha1"
     "reflect"
+    _ "embed"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/parser"
     "github.com/yuin/goldmark/extension"
     "github.com/yuin/goldmark/renderer/html"
     "github.com/skratchdot/open-golang/open"
+    go_qr "github.com/piglig/go-qr"
 )
 
 type chatmail_config struct {
@@ -136,15 +138,57 @@ func make_markdown_renderer() goldmark.Markdown {
     )
 }
 
+//go:embed delta-chat-bw.svg.tmpl
+var dc_logo_tmpl string
+
+func generate_qr_code(fqdn string) string {
+    // Generate DCACCOUNT: URL to go in code
+    new_acct_url := fmt.Sprintf("DCACCOUNT:https://%s/new", fqdn)
+    // Set up QR code generator tool
+    qr, err := go_qr.EncodeText(new_acct_url, go_qr.High)
+    if err != nil {
+        panic(err)
+    }
+    qr_scale := 1
+    qr_border := 4
+    config := go_qr.NewQrCodeImgConfig(qr_scale, qr_border)
+    // Ask it to produce an SVG of the URL
+    var svgbuf bytes.Buffer
+    err = qr.WriteAsSVG(config, &svgbuf, "#FFFFFF", "#000000")
+    // Load the DeltaChat logo as a template
+    // Compute offset constants e & f for the matrix transform
+    qr_dims :=  (qr.GetSize() * qr_scale) + (qr_border * 2)
+    offset_xy := (float32(qr_dims) / 2.0) - 4.0
+    // Insert templated DC logo into QR code SVG with transform params
+    tmpl, err := template.New("dc_logo_tmpl").Parse(dc_logo_tmpl)
+    if err != nil {
+        panic(err)
+    }
+    var logo bytes.Buffer
+    err = tmpl.Execute(&logo, offset_xy)
+    qr_svg_str := svgbuf.String()
+    split_point := strings.LastIndex(qr_svg_str, "<")
+    if split_point < 0 {
+        panic(err)
+    }
+    return qr_svg_str[0:split_point] + logo.String() + "</svg>"
+}
+
 func build_website(config chatmail_config, input_dir string, output_dir string) {
     page_layout_file := filepath.Join(input_dir, "page-layout.html")
-    templates, tmpl_err := template.New("page_layout").ParseFiles(page_layout_file)
-    if tmpl_err != nil {
-        panic(tmpl_err)
+    templates, err := template.New("page_layout").ParseFiles(page_layout_file)
+    if err != nil {
+        panic(err)
     }
-    contents, rd_err := os.ReadDir(input_dir)
-    if rd_err != nil {
-        panic(rd_err)
+    contents, err := os.ReadDir(input_dir)
+    if err != nil {
+        panic(err)
+    }
+    qr_invite_file := filepath.Join(output_dir, "qr-chatmail-invite-" + config.MailFullyQualifiedDomainName + ".svg")
+    qr_invite_data := generate_qr_code(config.MailFullyQualifiedDomainName)
+    err = os.WriteFile(qr_invite_file, []byte(qr_invite_data), 0644)
+    if err != nil {
+        panic(err)
     }
     md := make_markdown_renderer()
     for _, dirent := range contents {
@@ -284,9 +328,9 @@ func main() {
         os.RemoveAll(output_dir)
         os.Mkdir(output_dir, fs.ModeDir | 0755)
 		build_website(config, input_dir, output_dir)
-        index_html, path_err := filepath.Abs(filepath.Join(output_dir, "index.html"))
-        if path_err != nil {
-            panic(path_err)
+        index_html, err := filepath.Abs(filepath.Join(output_dir, "index.html"))
+        if err != nil {
+            panic(err)
         }
         open.Run("file://" + index_html)
 		watch_for_changes(config, input_dir, output_dir)

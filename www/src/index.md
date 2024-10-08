@@ -11,7 +11,7 @@ If you are viewing this page on a different device without a Delta Chat app,
 you can also **scan this QR code** with Delta Chat:
 
 <a href="DCACCOUNT:https://{{ .Config.MailFullyQualifiedDomainName }}/new">
-    <img width="300" style="float: none;" src="qr-chatmail-invite-{{ .Config.MailFullyQualifiedDomainName }}.png" /></a>
+    <img width="300" style="float: none;" src="qr-chatmail-invite-{{ .Config.MailFullyQualifiedDomainName }}.svg" /></a>
 
 🐣 **Choose** your Avatar and Name
 
