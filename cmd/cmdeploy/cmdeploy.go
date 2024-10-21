@@ -1,8 +1,9 @@
 package main
 
 import (
+	"github.com/s0ph0s-2/gochatmail/internal/config"
+
 	"bytes"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"html/template"
@@ -24,71 +25,8 @@ import (
     go_qr "github.com/piglig/go-qr"
 )
 
-type chatmail_config struct {
-	MailFullyQualifiedDomainName string
-    MaxEmailsPerMinutePerUser int
-    MaxMailboxSizeMB int
-    MaxMessageSizeB int
-    DeleteMailsAfterDays int
-    DeleteInactiveUsersAfterDays int
-    UsernameMinLength int
-    UsernameMaxLength int
-    PasswordMinLength int
-    PassthroughRecipientsList []string
-    PrivacyContactPostalAddress string
-    PrivacyContactEmailAddress string
-    PrivacyDataOfficerPostalAddress string
-    PrivacySupervisorPostalAddress string
-}
-
-func NewChatmailConfig(fqdn string) chatmail_config {
-    return chatmail_config{
-        fqdn,
-        30,
-        100,
-        31457280,
-        20,
-        90,
-        9,
-        9,
-        9,
-        []string{"xstore@testrun.org"},
-        "",
-        "",
-        "",
-        "",
-    }
-}
-
-func (config chatmail_config) Save(filename string) error {
-	output_txt, m_err := json.MarshalIndent(config, "", "  ")
-	if m_err != nil {
-        return m_err
-	}
-	f, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	f.Write(output_txt)
-    return nil
-}
-
-func LoadChatmailConfigFromFile(filename string, config *chatmail_config) error {
-    data, r_err := os.ReadFile(filename)
-    if r_err != nil {
-        return r_err
-    }
-    j_err := json.Unmarshal(data, config)
-    if j_err != nil {
-        return j_err
-    }
-    return nil
-}
-
 func do_init(fqdn string) {
-	config := NewChatmailConfig(fqdn)
+	config := config.NewChatmailConfig(fqdn)
     err := config.Save("./chatmail.json")
     if err != nil {
         panic(err)
@@ -125,7 +63,7 @@ func make_page_name(stem string) string {
 type page_vars struct {
     Title string
     AutoReload bool
-    Config chatmail_config
+    Config config.ChatmailConfig
 }
 
 func make_markdown_renderer() goldmark.Markdown {
@@ -174,7 +112,7 @@ func generate_qr_code(fqdn string) string {
     return qr_svg_str[0:split_point] + logo.String() + "</svg>"
 }
 
-func build_website(config chatmail_config, input_dir string, output_dir string) {
+func build_website(cm_config config.ChatmailConfig, input_dir string, output_dir string) {
     page_layout_file := filepath.Join(input_dir, "page-layout.html")
     templates, err := template.New("page_layout").ParseFiles(page_layout_file)
     if err != nil {
@@ -184,8 +122,8 @@ func build_website(config chatmail_config, input_dir string, output_dir string) 
     if err != nil {
         panic(err)
     }
-    qr_invite_file := filepath.Join(output_dir, "qr-chatmail-invite-" + config.MailFullyQualifiedDomainName + ".svg")
-    qr_invite_data := generate_qr_code(config.MailFullyQualifiedDomainName)
+    qr_invite_file := filepath.Join(output_dir, "qr-chatmail-invite-" + cm_config.MailFullyQualifiedDomainName + ".svg")
+    qr_invite_data := generate_qr_code(cm_config.MailFullyQualifiedDomainName)
     err = os.WriteFile(qr_invite_file, []byte(qr_invite_data), 0644)
     if err != nil {
         panic(err)
@@ -216,7 +154,7 @@ func build_website(config chatmail_config, input_dir string, output_dir string) 
             if err != nil {
                 panic(err)
             }
-            this_page_vars := page_vars{ page_name, true, config }
+            this_page_vars := page_vars{ page_name, true, cm_config }
             var html_buf bytes.Buffer
             err = local_tmpls.ExecuteTemplate(&html_buf, "page-layout.html", this_page_vars)
             if err != nil {
@@ -277,7 +215,7 @@ func analyze_dir(dir string) map[string]file_analysis_result {
     return results
 }
 
-func watch_for_changes(config chatmail_config, input_dir string, output_dir string) {
+func watch_for_changes(cm_config config.ChatmailConfig, input_dir string, output_dir string) {
     fmt.Printf("Watching for changes in %s...\n", input_dir)
     fmt.Println("Press Ctrl+C to stop watching once you're finished editing.")
     var current_state map[string]file_analysis_result = analyze_dir(input_dir)
@@ -290,7 +228,7 @@ func watch_for_changes(config chatmail_config, input_dir string, output_dir stri
             continue
         }
         current_state = next_state
-        build_website(config, input_dir, output_dir)
+        build_website(cm_config, input_dir, output_dir)
         fmt.Println("Changes detected! Pages have been regenerated.")
     }
 }
@@ -317,9 +255,9 @@ func main() {
 		do_init(fqdn)
 	case "webdev":
 		webdevCmd.Parse(os.Args[2:])
-        var config chatmail_config
+        var cm_config config.ChatmailConfig
         config_file := filepath.Join(".", "chatmail.json")
-        cl_err := LoadChatmailConfigFromFile(config_file, &config)
+        cl_err := config.LoadChatmailConfigFromFile(config_file, &cm_config)
         if cl_err != nil {
             panic(cl_err)
         }
@@ -327,13 +265,13 @@ func main() {
         output_dir := filepath.Join(".", "www", "build")
         os.RemoveAll(output_dir)
         os.Mkdir(output_dir, fs.ModeDir | 0755)
-		build_website(config, input_dir, output_dir)
+		build_website(cm_config, input_dir, output_dir)
         index_html, err := filepath.Abs(filepath.Join(output_dir, "index.html"))
         if err != nil {
             panic(err)
         }
         open.Run("file://" + index_html)
-		watch_for_changes(config, input_dir, output_dir)
+		watch_for_changes(cm_config, input_dir, output_dir)
 	default:
 		fmt.Println("expected 'init' or 'webdev' subcommands")
 		os.Exit(1)
