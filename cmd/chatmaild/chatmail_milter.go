@@ -6,7 +6,6 @@ import (
 
 	"github.com/s0ph0s-2/gochatmail/internal/config"
 
-	"bytes"
 	"encoding/base64"
 	"io"
 	"log"
@@ -77,7 +76,10 @@ func (cm *ChatmailMilter) Body(m *milter.Modifier) (milter.Response, error) {
 }
 
 func (cm *ChatmailMilter) BodyChunk(chunk []byte, m *milter.Modifier) (milter.Response, error) {
-	cm.body.Write(chunk)
+    _, err := cm.body.Write(chunk)
+    if err != nil {
+        return nil, err
+    }
 	return nil, nil
 }
 
@@ -130,6 +132,7 @@ func (cm *ChatmailMilter) ValidateEmail() (milter.Response, error) {
 func IsEncryptedOpenPGPPayload(payload []byte) bool {
 	i := 0
 	for i < len(payload) {
+        // Permit only OpenPGP formatted binary data.
 		if payload[i]&0xC0 != 0xC0 {
 			return false
 		}
@@ -156,20 +159,17 @@ func IsEncryptedOpenPGPPayload(payload []byte) bool {
 		}
 		i += body_len
 		if i == len(payload) {
-			if packet_type_id == 18 {
-				return true
-			}
+            // The last packet in the stream should be
+            // "Symmetrically Encrypted and Integrity Protected Data Packet
+            // (SEIDP)".
+            // This is the only place in this function that is allowed to return
+            // true.
+			return packet_type_id == 18
 		} else if packet_type_id != 1 && packet_type_id != 3 {
 			return false
 		}
 	}
-	if i == 0 {
-		return false
-	}
-	if i > len(payload) {
-		return false
-	}
-	return true
+    return false
 }
 
 func IsValidEncryptedPayload(payload string) bool {

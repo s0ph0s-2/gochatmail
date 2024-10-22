@@ -1,13 +1,13 @@
-From: {{.from_addr}}
-To: {{.to_addr}}
-Subject: {{.subject}}
+From: {{.FromAddr}}
+To: {{.ToAddr}}
+Subject: {{.Subject}}
 Date: Sun, 15 Oct 2023 16:43:21 +0000
 Message-ID: <Mr.UVyJWZmkCKM.hGzNc6glBE_@c2.testrun.org>
 In-Reply-To: <Mr.MvmCz-GQbi_.6FGRkhDf05c@c2.testrun.org>
 References: <Mr.3gckbNy5bch.uK3Hd2Ws6-w@c2.testrun.org>
 	<Mr.MvmCz-GQbi_.6FGRkhDf05c@c2.testrun.org>
 Chat-Version: 1.0
-Autocrypt: addr={{.from_addr}}; prefer-encrypt=mutual;
+Autocrypt: addr={{.FromAddr}}; prefer-encrypt=mutual;
 	keydata=xjMEZSwWjhYJKwYBBAHaRw8BAQdAQBEhqeJh0GueHB6kF/DUQqYCxARNBVokg/AzT+7LqH
 	rNFzxiYXJiYXpAYzIudGVzdHJ1bi5vcmc+wosEEBYIADMCGQEFAmUsFo4CGwMECwkIBwYVCAkKCwID
 	FgIBFiEEFTfUNvVnY3b9F7yHnmme1PfUhX8ACgkQnmme1PfUhX9A4AEAnHWHp49eBCMHK5t66gYPiW
