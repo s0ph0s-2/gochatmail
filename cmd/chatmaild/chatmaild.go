@@ -10,11 +10,6 @@ import (
 	"syscall"
 )
 
-type closeable_server interface {
-    Serve(l net.Listener) error
-    Close() error
-}
-
 func make_listener(uri string) (net.Listener, error) {
     parts := strings.SplitN(uri, "://", 2)
     if len(parts) != 2 {
@@ -26,6 +21,7 @@ func make_listener(uri string) (net.Listener, error) {
 
 func main() {
 	milter_listen_addr := "unix:///tmp/mandatory-encryption-milter.sock"
+    sasl_listen_addr := "unix:///tmp/sasl.sock"
 
     milter_server, err := new_milter_server(milter_listen_addr)
     if err != nil {
@@ -39,6 +35,18 @@ func main() {
         }
     }()
 
+    sasl_server,  err := new_sasl_server(sasl_listen_addr)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    go func() {
+        err := sasl_server.serve()
+        if err != nil {
+            log.Fatal(err)
+        }
+    }()
+
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -46,6 +54,9 @@ func main() {
 		if err := milter_server.stop(); err != nil {
 			log.Fatal("Failed to close milter: ", err)
 		}
+        if err := sasl_server.stop(); err != nil {
+            log.Fatal("Failed to close SASL server: ", err)
+        }
 	}()
 
 	// TODO: SQLite account database?
