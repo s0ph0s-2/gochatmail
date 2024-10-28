@@ -1,48 +1,52 @@
 package main
 
 import (
+    "fmt"
 	"log"
 	"net"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
-
-	"github.com/emersion/go-milter"
 )
 
-func main() {
-	listenURI := "unix:///tmp/mandatory-encryption-milter.sock"
-	parts := strings.SplitN(listenURI, "://", 2)
-	if len(parts) != 2 {
-		log.Fatal("Invalid listen URI")
-	}
-	listenNetwork, listenAddr := parts[0], parts[1]
+type closeable_server interface {
+    Serve(l net.Listener) error
+    Close() error
+}
 
-	server := milter.Server{
-		NewMilter: func() milter.Milter {
-			return &ChatmailMilter{}
-		},
-		Protocol: milter.OptNoConnect | milter.OptNoHelo,
-	}
-	ln, err := net.Listen(listenNetwork, listenAddr)
-	if err != nil {
-		log.Fatal("Failed to set up listener: ", err)
-	}
+func make_listener(uri string) (net.Listener, error) {
+    parts := strings.SplitN(uri, "://", 2)
+    if len(parts) != 2 {
+        return nil, fmt.Errorf("Invalid listen URI (missing '://' between protocol and details): %s", uri)
+    }
+    listenNetwork, listenAddr := parts[0], parts[1]
+    return net.Listen(listenNetwork, listenAddr)
+}
+
+func main() {
+	milter_listen_addr := "unix:///tmp/mandatory-encryption-milter.sock"
+
+    milter_server, err := new_milter_server(milter_listen_addr)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    go func() {
+        err := milter_server.serve()
+        if err != nil {
+            log.Fatal(err)
+        }
+    }()
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigs
-		if err := server.Close(); err != nil {
-			log.Fatal("Failed to close server: ", err)
+		if err := milter_server.stop(); err != nil {
+			log.Fatal("Failed to close milter: ", err)
 		}
 	}()
 
-	log.Println("Mandatory Encryption milter starting at", listenURI)
-	if err = server.Serve(ln); err != nil && err != milter.ErrServerClosed {
-		log.Fatal("Failed to start milter: ", err)
-	}
-	// TODO: Dovecot SASL socket?
 	// TODO: SQLite account database?
 }

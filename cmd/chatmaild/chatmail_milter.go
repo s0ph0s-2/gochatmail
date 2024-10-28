@@ -7,6 +7,7 @@ import (
 	"github.com/s0ph0s-2/gochatmail/internal/config"
 
 	"encoding/base64"
+    "fmt"
 	"io"
 	"log"
 	"net"
@@ -17,6 +18,39 @@ import (
 
 	"github.com/emersion/go-milter"
 )
+
+type milter_server struct {
+    server milter.Server
+    listener net.Listener
+}
+
+func new_milter_server(listen_uri string) (milter_server, error) {
+	server := milter.Server{
+		NewMilter: func() milter.Milter {
+			return &ChatmailMilter{}
+		},
+		Protocol: milter.OptNoConnect | milter.OptNoHelo,
+	}
+	ln, err := make_listener(listen_uri)
+	if err != nil {
+        return milter_server{}, fmt.Errorf("Failed to set up listener for milter: %q", err)
+	}
+
+	log.Printf("Using %s as milter listen socket\n", listen_uri)
+    return milter_server{server, ln}, nil
+}
+
+func (ms *milter_server) serve() error {
+    err := ms.server.Serve(ms.listener)
+    if err != nil && err != milter.ErrServerClosed {
+        log.Fatal("Failed to start milter: ", err)
+    }
+    return err
+}
+
+func (ms *milter_server) stop() error {
+    return ms.server.Close()
+}
 
 type ChatmailMilter struct {
 	mailFrom      string
