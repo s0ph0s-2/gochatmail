@@ -4,221 +4,221 @@ import (
 	"github.com/s0ph0s-2/gochatmail/internal/config"
 
 	"bytes"
-    "fmt"
-    "math/big"
-    "net/mail"
-    "path/filepath"
-    "crypto/rand"
+	"crypto/rand"
+	"fmt"
+	"math/big"
+	"net/mail"
+	"path/filepath"
 	"testing"
-    "text/template"
+	"text/template"
 
 	"github.com/emersion/go-milter"
 )
 
 func random_choices(input_set string, output_len int) string {
-    intcap := big.NewInt(int64(len(input_set)))
-    var result bytes.Buffer
-    for i := 0; i < output_len; i++ {
-        choice, err := rand.Int(rand.Reader, intcap)
-        if err != nil {
-            panic(err)
-        }
-        result.WriteByte(input_set[choice.Int64()])
-    }
-    return result.String()
+	intcap := big.NewInt(int64(len(input_set)))
+	var result bytes.Buffer
+	for i := 0; i < output_len; i++ {
+		choice, err := rand.Int(rand.Reader, intcap)
+		if err != nil {
+			panic(err)
+		}
+		result.WriteByte(input_set[choice.Int64()])
+	}
+	return result.String()
 }
 
 func default_domain() string {
-    return "chat.example"
+	return "chat.example"
 }
 
 func make_milter() ChatmailMilter {
-    cfg := config.NewChatmailConfig(default_domain())
-    cm := ChatmailMilter{}
-    cm.config = cfg
-    return cm
+	cfg := config.NewChatmailConfig(default_domain())
+	cm := ChatmailMilter{}
+	cm.config = cfg
+	return cm
 }
 
 func make_account() (string, string) {
-    const alphanumeric = "abcdefghijklmnopqrstuvwxyz0123456789"
-    domain := default_domain()
-    user := fmt.Sprintf("ac_%s@%s", random_choices(alphanumeric, 10), domain)
-    password := random_choices(alphanumeric, 16)
-    return user, password
+	const alphanumeric = "abcdefghijklmnopqrstuvwxyz0123456789"
+	domain := default_domain()
+	user := fmt.Sprintf("ac_%s@%s", random_choices(alphanumeric, 10), domain)
+	password := random_choices(alphanumeric, 16)
+	return user, password
 }
 
 type emlctx struct {
-    FromAddr string
-    ToAddr string
-    Subject string
+	FromAddr string
+	ToAddr   string
+	Subject  string
 }
 
 func emlctx_default_subject(from_addr string, to_addr string) emlctx {
-    return emlctx{from_addr, to_addr, "..."}
+	return emlctx{from_addr, to_addr, "..."}
 }
 
 func loademailmsg(filename string, ctx emlctx) *mail.Message {
-    path := filepath.Join("testdata", filename)
-    t, err := template.ParseFiles(path)
-    if err != nil {
-        panic(err)
-    }
-    var tmpl bytes.Buffer
-    err = t.Execute(&tmpl, &ctx)
-    if err != nil {
-        panic(err)
-    }
-    msg, err := mail.ReadMessage(&tmpl)
-    if err != nil {
-        panic(err)
-    }
-    return msg
+	path := filepath.Join("testdata", filename)
+	t, err := template.ParseFiles(path)
+	if err != nil {
+		panic(err)
+	}
+	var tmpl bytes.Buffer
+	err = t.Execute(&tmpl, &ctx)
+	if err != nil {
+		panic(err)
+	}
+	msg, err := mail.ReadMessage(&tmpl)
+	if err != nil {
+		panic(err)
+	}
+	return msg
 }
 
 func loademail(cm *ChatmailMilter, filename string, ctx emlctx) {
-    msg := loademailmsg(filename, ctx)
-    var bodycopy bytes.Buffer
-    cm.mimeFrom = msg.Header.Get("From")
-    cm.secureJoinHdr = msg.Header.Get("Secure-Join")
-    cm.subject = msg.Header.Get("Subject")
-    cm.content_type = msg.Header.Get("Content-Type")
-    _, err := bodycopy.ReadFrom(msg.Body)
-    if err != nil {
-        panic(err)
-    }
-    cm.body = &bodycopy
+	msg := loademailmsg(filename, ctx)
+	var bodycopy bytes.Buffer
+	cm.mimeFrom = msg.Header.Get("From")
+	cm.secureJoinHdr = msg.Header.Get("Secure-Join")
+	cm.subject = msg.Header.Get("Subject")
+	cm.content_type = msg.Header.Get("Content-Type")
+	_, err := bodycopy.ReadFrom(msg.Body)
+	if err != nil {
+		panic(err)
+	}
+	cm.body = &bodycopy
 }
 
 func setenvelope(cm *ChatmailMilter, mailFrom string, rcptTos []string) {
-    cm.mailFrom = mailFrom
-    cm.rcptTos = rcptTos
+	cm.mailFrom = mailFrom
+	cm.rcptTos = rcptTos
 }
 
 func test_is_valid_encrypted_message(filename string, ctx emlctx) (bool, error) {
-    msg := loademailmsg(filename, ctx)
-    return IsValidEncryptedMessage(ctx.Subject, msg.Header.Get("Content-Type"), msg.Body)
+	msg := loademailmsg(filename, ctx)
+	return IsValidEncryptedMessage(ctx.Subject, msg.Header.Get("Content-Type"), msg.Body)
 }
 
 func TestMilterRejectForgedFromAddr(t *testing.T) {
-    from_addr, _ := make_account()
-    recipient, _ := make_account()
-    to_addr, _ := make_account()
-    cm := make_milter()
-    setenvelope(&cm, from_addr, []string{ recipient })
-    loademail(&cm, "plain.eml", emlctx_default_subject(from_addr, to_addr))
+	from_addr, _ := make_account()
+	recipient, _ := make_account()
+	to_addr, _ := make_account()
+	cm := make_milter()
+	setenvelope(&cm, from_addr, []string{recipient})
+	loademail(&cm, "plain.eml", emlctx_default_subject(from_addr, to_addr))
 
-    result, err := cm.ValidateEmail()
-    want := milter.RespAccept
-    if err != nil || result != want {
-        t.Fatalf("ValidateEmail() with normal headers = %q, %v; want %q, nil", result, err, want)
-    }
+	result, err := cm.ValidateEmail()
+	want := milter.RespAccept
+	if err != nil || result != want {
+		t.Fatalf("ValidateEmail() with normal headers = %q, %v; want %q, nil", result, err, want)
+	}
 
-    loademail(&cm, "plain.eml", emlctx_default_subject("forged@c3.testrun.org", to_addr))
-    result, err = cm.ValidateEmail()
-    want = milter.RespReject
-    if err != nil || result != want {
-        t.Fatalf("ValidateEmail() with forged from = %q, %v; want %q, nil", result, err, want)
-    }
+	loademail(&cm, "plain.eml", emlctx_default_subject("forged@c3.testrun.org", to_addr))
+	result, err = cm.ValidateEmail()
+	want = milter.RespReject
+	if err != nil || result != want {
+		t.Fatalf("ValidateEmail() with forged from = %q, %v; want %q, nil", result, err, want)
+	}
 }
 
 func TestMilterRejectUnencryptedMail(t *testing.T) {
-    from_addr := "a@external.example"
-    to_addr := "b@external.example"
-    subject := "..."
-    ctx := emlctx{from_addr, to_addr, subject}
-    
-    result, err := test_is_valid_encrypted_message("plain.eml", ctx)
-    want := false
-    if err != nil || result != want {
-        t.Fatalf("IsValidEncryptedMessage() with plain message = %t, %v; want %t, nil", result, err, want)
-    }
-    
-    result, err = test_is_valid_encrypted_message("fake-encrypted.eml", ctx)
-    want = false
-    if err != nil || result != want {
-        t.Fatalf("IsValidEncryptedMessage() with fake encrypted message = %t, %v; want %t, nil", result, err, want)
-    }
+	from_addr := "a@external.example"
+	to_addr := "b@external.example"
+	subject := "..."
+	ctx := emlctx{from_addr, to_addr, subject}
+
+	result, err := test_is_valid_encrypted_message("plain.eml", ctx)
+	want := false
+	if err != nil || result != want {
+		t.Fatalf("IsValidEncryptedMessage() with plain message = %t, %v; want %t, nil", result, err, want)
+	}
+
+	result, err = test_is_valid_encrypted_message("fake-encrypted.eml", ctx)
+	want = false
+	if err != nil || result != want {
+		t.Fatalf("IsValidEncryptedMessage() with fake encrypted message = %t, %v; want %t, nil", result, err, want)
+	}
 }
 
 func TestMilterAcceptEncryptedEmailWithAllCommonSubjects(t *testing.T) {
-    for _, subj := range CommonEncryptedSubjects {
-        ctx := emlctx{
-            "1@external.example",
-            "2@external.example",
-            subj,
-        }
-        result, err := test_is_valid_encrypted_message("encrypted.eml", ctx)
-        want := true
-        if err != nil || result != want {
-            t.Fatalf("IsValidEncryptedMessage() with valid message and common subject = %t, %v; want %t, nil", result, err, want)
-        }
-    }
-    ctx := emlctx{
-        "1@external.example",
-        "2@external.example",
-        "Click this link!",
-    }
-    result, err := test_is_valid_encrypted_message("encrypted.eml", ctx)
-    want := false
-    if err != nil || result != want {
-        t.Fatalf("IsValidEncryptedMessage() with valid message and uncommon subject = %t, %v; want %t, nil", result, err, want)
-    }
+	for _, subj := range CommonEncryptedSubjects {
+		ctx := emlctx{
+			"1@external.example",
+			"2@external.example",
+			subj,
+		}
+		result, err := test_is_valid_encrypted_message("encrypted.eml", ctx)
+		want := true
+		if err != nil || result != want {
+			t.Fatalf("IsValidEncryptedMessage() with valid message and common subject = %t, %v; want %t, nil", result, err, want)
+		}
+	}
+	ctx := emlctx{
+		"1@external.example",
+		"2@external.example",
+		"Click this link!",
+	}
+	result, err := test_is_valid_encrypted_message("encrypted.eml", ctx)
+	want := false
+	if err != nil || result != want {
+		t.Fatalf("IsValidEncryptedMessage() with valid message and uncommon subject = %t, %v; want %t, nil", result, err, want)
+	}
 }
 
 func TestMilterRejectLiteralOpenPGPPackets(t *testing.T) {
-    ctx := emlctx_default_subject("1@external.example", "2@external.example")
-    result, err := test_is_valid_encrypted_message("literal.eml", ctx)
-    want := false
-    if err != nil || result != want {
-        t.Fatalf("IsValidEncryptedMessage() with literal OpenPGP packet = %t, %v; want %t, nil", result, err, want)
-    }
+	ctx := emlctx_default_subject("1@external.example", "2@external.example")
+	result, err := test_is_valid_encrypted_message("literal.eml", ctx)
+	want := false
+	if err != nil || result != want {
+		t.Fatalf("IsValidEncryptedMessage() with literal OpenPGP packet = %t, %v; want %t, nil", result, err, want)
+	}
 }
 
 func TestMilterRejectUnencryptedDeliveryNotifications(t *testing.T) {
-    from_addr, _ := make_account()
-    to_addr, _ := make_account()
-    to_addr += ".org"
-    ctx := emlctx_default_subject(from_addr, to_addr)
-    result, err := test_is_valid_encrypted_message("mdn.eml", ctx)
-    want := false
-    if err != nil || result != want {
-        t.Fatalf("IsValidEncryptedMessage() with unencrypted MDN = %t, %v; want %t, nil", result, err, want)
-    }
+	from_addr, _ := make_account()
+	to_addr, _ := make_account()
+	to_addr += ".org"
+	ctx := emlctx_default_subject(from_addr, to_addr)
+	result, err := test_is_valid_encrypted_message("mdn.eml", ctx)
+	want := false
+	if err != nil || result != want {
+		t.Fatalf("IsValidEncryptedMessage() with unencrypted MDN = %t, %v; want %t, nil", result, err, want)
+	}
 }
 
 func TestMilterAcceptToPrivacyAddress(t *testing.T) {
-    from_addr, _ := make_account()
-    to_addr := "privacy@testrun.org"
-    cm := make_milter()
-    cm.config.PassthroughRecipientsList = []string{to_addr}
-    invalid_to_addr := "privacy@another.example"
-    loademail(&cm, "plain.eml", emlctx_default_subject(from_addr, to_addr))
-    setenvelope(&cm, from_addr, []string{to_addr})
-    result, err := cm.ValidateEmail()
-    want := milter.RespAccept
-    if err != nil || result != want {
-        t.Fatalf("ValidateEmail() with privacy@ = %q, %v; want %q, nil", result, err, want)
-    }
+	from_addr, _ := make_account()
+	to_addr := "privacy@testrun.org"
+	cm := make_milter()
+	cm.config.PassthroughRecipientsList = []string{to_addr}
+	invalid_to_addr := "privacy@another.example"
+	loademail(&cm, "plain.eml", emlctx_default_subject(from_addr, to_addr))
+	setenvelope(&cm, from_addr, []string{to_addr})
+	result, err := cm.ValidateEmail()
+	want := milter.RespAccept
+	if err != nil || result != want {
+		t.Fatalf("ValidateEmail() with privacy@ = %q, %v; want %q, nil", result, err, want)
+	}
 
-    setenvelope(&cm, from_addr, []string{to_addr, invalid_to_addr})
-    result, err = cm.ValidateEmail()
-    want = milter.RespReject
-    if err != nil || result != want {
-        t.Fatalf("ValidateEmail() with invalid privacy@ = %q, %v; want %q, nil", result, err, want)
-    }
+	setenvelope(&cm, from_addr, []string{to_addr, invalid_to_addr})
+	result, err = cm.ValidateEmail()
+	want = milter.RespReject
+	if err != nil || result != want {
+		t.Fatalf("ValidateEmail() with invalid privacy@ = %q, %v; want %q, nil", result, err, want)
+	}
 
 }
 
 func TestMilterPassthroughSender(t *testing.T) {
-    from_addr, _ := make_account()
-    to_addr := "someone@external.example"
+	from_addr, _ := make_account()
+	to_addr := "someone@external.example"
 	cm := make_milter()
-    cm.config.PassthroughSendersList = []string{from_addr}
-    loademail(&cm, "plain.eml", emlctx_default_subject(from_addr, to_addr))
-    setenvelope(&cm, from_addr, []string{to_addr})
+	cm.config.PassthroughSendersList = []string{from_addr}
+	loademail(&cm, "plain.eml", emlctx_default_subject(from_addr, to_addr))
+	setenvelope(&cm, from_addr, []string{to_addr})
 
-    result, err := cm.ValidateEmail()
-    want := milter.RespAccept
+	result, err := cm.ValidateEmail()
+	want := milter.RespAccept
 	if err != nil || result != want {
 		t.Fatalf("ValidateEmail() with passthrough sender = %q, %v, want %q, nil", result, err, want)
 	}

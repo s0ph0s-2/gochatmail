@@ -7,12 +7,12 @@ import (
 	"github.com/s0ph0s-2/gochatmail/internal/config"
 
 	"encoding/base64"
-    "fmt"
+	"fmt"
 	"io"
 	"log"
 	"net"
+	"net/mail"
 	"net/textproto"
-    "net/mail"
 	"slices"
 	"strings"
 
@@ -20,8 +20,8 @@ import (
 )
 
 type milter_server struct {
-    server milter.Server
-    listener net.Listener
+	server   milter.Server
+	listener net.Listener
 }
 
 func new_milter_server(listen_uri string) (milter_server, error) {
@@ -33,28 +33,28 @@ func new_milter_server(listen_uri string) (milter_server, error) {
 	}
 	ln, err := make_listener(listen_uri)
 	if err != nil {
-        return milter_server{}, fmt.Errorf("Failed to set up listener for milter: %q", err)
+		return milter_server{}, fmt.Errorf("Failed to set up listener for milter: %q", err)
 	}
 
 	log.Printf("using %s as milter listen socket\n", listen_uri)
-    return milter_server{server, ln}, nil
+	return milter_server{server, ln}, nil
 }
 
 func (ms *milter_server) serve() error {
-    err := ms.server.Serve(ms.listener)
-    if err != nil && err != milter.ErrServerClosed {
-        log.Fatal("Failed to start milter: ", err)
-    }
-    return err
+	err := ms.server.Serve(ms.listener)
+	if err != nil && err != milter.ErrServerClosed {
+		log.Fatal("Failed to start milter: ", err)
+	}
+	return err
 }
 
 func (ms *milter_server) stop() error {
-    return ms.server.Close()
+	return ms.server.Close()
 }
 
 type ChatmailMilter struct {
 	mailFrom      string
-    mimeFrom      string
+	mimeFrom      string
 	rcptTos       []string
 	secureJoinHdr string
 	subject       string
@@ -95,8 +95,8 @@ func (cm *ChatmailMilter) Header(name string, value string, m *milter.Modifier) 
 	} else if strings.EqualFold(name, "subject") {
 		cm.subject = value
 	} else if strings.EqualFold(name, "from") {
-        cm.mimeFrom = value
-    }
+		cm.mimeFrom = value
+	}
 	return milter.RespContinue, nil
 }
 
@@ -110,10 +110,10 @@ func (cm *ChatmailMilter) Body(m *milter.Modifier) (milter.Response, error) {
 }
 
 func (cm *ChatmailMilter) BodyChunk(chunk []byte, m *milter.Modifier) (milter.Response, error) {
-    _, err := cm.body.Write(chunk)
-    if err != nil {
-        return nil, err
-    }
+	_, err := cm.body.Write(chunk)
+	if err != nil {
+		return nil, err
+	}
 	return nil, nil
 }
 
@@ -131,13 +131,13 @@ func (cm *ChatmailMilter) ValidateEmail() (milter.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-    mime_from_addr, err := mail.ParseAddress(cm.mimeFrom)
-    if err != nil {
-        return nil, err
-    }
-    if !strings.EqualFold(mime_from_addr.Address, cm.mailFrom) {
-        return milter.RespReject, nil
-    }
+	mime_from_addr, err := mail.ParseAddress(cm.mimeFrom)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.EqualFold(mime_from_addr.Address, cm.mailFrom) {
+		return milter.RespReject, nil
+	}
 	mime_from_parts := strings.Split(mime_from_addr.Address, "@")
 	mime_from_domain := mime_from_parts[len(mime_from_parts)-1]
 	for _, recipient := range cm.rcptTos {
@@ -166,7 +166,7 @@ func (cm *ChatmailMilter) ValidateEmail() (milter.Response, error) {
 func IsEncryptedOpenPGPPayload(payload []byte) bool {
 	i := 0
 	for i < len(payload) {
-        // Permit only OpenPGP formatted binary data.
+		// Permit only OpenPGP formatted binary data.
 		if payload[i]&0xC0 != 0xC0 {
 			return false
 		}
@@ -177,15 +177,15 @@ func IsEncryptedOpenPGPPayload(payload []byte) bool {
 			body_len = int(payload[i])
 			i += 1
 		} else if payload[i] < 224 {
-            if (i + 1) >= len(payload) {
-                return false
-            }
+			if (i + 1) >= len(payload) {
+				return false
+			}
 			body_len = ((int(payload[i]) - 192) << 8) + int(payload[i+1]) + 192
-            i += 2
+			i += 2
 		} else if payload[i] == 255 {
-            if (i + 4) >= len(payload) {
-                return false
-            }
+			if (i + 4) >= len(payload) {
+				return false
+			}
 			body_len = (int(payload[i+1]) << 24) | (int(payload[i+2]) << 16) | (int(payload[i+3]) << 8) | int(payload[i+4])
 			i += 5
 		} else {
@@ -193,17 +193,17 @@ func IsEncryptedOpenPGPPayload(payload []byte) bool {
 		}
 		i += body_len
 		if i == len(payload) {
-            // The last packet in the stream should be
-            // "Symmetrically Encrypted and Integrity Protected Data Packet
-            // (SEIDP)".
-            // This is the only place in this function that is allowed to return
-            // true.
+			// The last packet in the stream should be
+			// "Symmetrically Encrypted and Integrity Protected Data Packet
+			// (SEIDP)".
+			// This is the only place in this function that is allowed to return
+			// true.
 			return packet_type_id == 18
 		} else if packet_type_id != 1 && packet_type_id != 3 {
 			return false
 		}
 	}
-    return false
+	return false
 }
 
 func IsValidEncryptedPayload(payload string) bool {
