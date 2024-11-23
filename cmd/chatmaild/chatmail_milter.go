@@ -36,7 +36,7 @@ func new_milter_server(listen_uri string) (milter_server, error) {
         return milter_server{}, fmt.Errorf("Failed to set up listener for milter: %q", err)
 	}
 
-	log.Printf("Using %s as milter listen socket\n", listen_uri)
+	log.Printf("using %s as milter listen socket\n", listen_uri)
     return milter_server{server, ln}, nil
 }
 
