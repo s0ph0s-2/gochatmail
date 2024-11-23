@@ -7,7 +7,10 @@ chatmaild:
 cmdeploy:
 	go build ./cmd/cmdeploy
 
+test: check
+
 check:
+	go vet ./...
 	go test ./cmd/chatmaild
 	go test ./cmd/cmdeploy
 
@@ -16,3 +19,5 @@ check-format:
 
 format:
 	gofmt -l -w .
+
+.PHONY: build test check check-format format
