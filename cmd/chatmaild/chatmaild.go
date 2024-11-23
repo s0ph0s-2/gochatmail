@@ -40,7 +40,9 @@ func main() {
         log.Fatal(err)
     }
 
-    go func() {
+    // Last listener must not be in a goroutine, otherwise nothing keeps the
+    // program running.
+    func() {
         err := sasl_server.serve()
         if err != nil {
             log.Fatal(err)
