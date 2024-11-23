@@ -65,6 +65,6 @@ Open an issue or a PR!
 ## What is the license?
 
 MIT, as with the upstream project. See
-[LICENSE.txt](https://github.com/s0ph0s-2/gochatmail/blob/main/LICENSE.txt).
+[LICENSE.txt](https://github.com/s0ph0s-dog/gochatmail/blob/main/LICENSE.txt).
 Note that this project also follows [the Delta Chat community standards and
 practices](https://delta.chat/en/community-standards).

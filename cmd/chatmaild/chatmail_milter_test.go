@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/s0ph0s-2/gochatmail/internal/config"
+	"github.com/s0ph0s-dog/gochatmail/internal/config"
 
 	"bytes"
 	"crypto/rand"

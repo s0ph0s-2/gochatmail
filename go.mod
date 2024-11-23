@@ -1,4 +1,4 @@
-module github.com/s0ph0s-2/gochatmail
+module github.com/s0ph0s-dog/gochatmail
 
 go 1.22.7
 
